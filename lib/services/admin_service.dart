@@ -182,133 +182,6 @@ class AdminService {
     }
   }
 
-  // NEW: Get all admins
-  Future<List<Map<String, dynamic>>> getAllAdmins() async {
-    try {
-      final response = await _supabase
-          .from('users')
-          .select()
-          .eq('is_admin', true)
-          .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      print('Error fetching admins: $e');
-      throw Exception('Gagal memuat data admin');
-    }
-  }
-
-  // NEW: Create new admin
-  Future<void> createNewAdmin({
-    required String email,
-    required String password,
-    required String displayName,
-  }) async {
-    try {
-      // Register admin user using Supabase Auth
-      final authResponse = await _supabase.auth.signUp(
-        email: email,
-        password: password,
-        data: {
-          'display_name': displayName,
-        },
-      );
-
-      if (authResponse.user == null) {
-        throw Exception('Gagal membuat akun admin');
-      }
-
-      // Create user record in users table with is_admin = true
-      await _supabase.from('users').insert({
-        'id': authResponse.user!.id,
-        'email': email,
-        'display_name': displayName,
-        'username': email.split('@').first,
-        'is_admin': true,
-        'is_active': true,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-    } on AuthException catch (e) {
-      print('Auth error creating admin: ${e.message}');
-      if (e.message.contains('already registered')) {
-        throw Exception('Email sudah terdaftar');
-      }
-      throw Exception('Gagal membuat admin: ${e.message}');
-    } catch (e) {
-      print('Error creating admin: $e');
-      throw Exception('Gagal membuat admin: ${e.toString()}');
-    }
-  }
-
-  // NEW: Update admin status (activate/deactivate)
-  Future<void> updateAdminStatus(String adminId, bool isActive) async {
-    try {
-      await _supabase
-          .from('users')
-          .update({
-        'is_active': isActive,
-        'updated_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', adminId);
-    } catch (e) {
-      print('Error updating admin status: $e');
-      throw Exception('Gagal memperbarui status admin');
-    }
-  }
-
-  // NEW: Remove admin role (demote to regular user)
-  Future<void> removeAdminRole(String adminId) async {
-    try {
-      await _supabase
-          .from('users')
-          .update({
-        'is_admin': false,
-        'updated_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', adminId);
-    } catch (e) {
-      print('Error removing admin role: $e');
-      throw Exception('Gagal menghapus role admin');
-    }
-  }
-
-  // NEW: Promote user to admin
-  Future<void> promoteToAdmin(String userId) async {
-    try {
-      await _supabase
-          .from('users')
-          .update({
-        'is_admin': true,
-        'updated_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', userId);
-    } catch (e) {
-      print('Error promoting user to admin: $e');
-      throw Exception('Gagal mempromosikan user ke admin');
-    }
-  }
-
-  // NEW: Delete admin account
-  Future<void> deleteAdmin(String adminId) async {
-    try {
-      // First check if this is not the last admin
-      final admins = await getAllAdmins();
-      if (admins.length <= 1) {
-        throw Exception('Tidak dapat menghapus admin terakhir');
-      }
-
-      // Delete from users table
-      await _supabase.from('users').delete().eq('id', adminId);
-
-      // Note: Deleting from auth.users requires admin API access
-      // This would need to be done via a server-side function or Supabase dashboard
-    } catch (e) {
-      print('Error deleting admin: $e');
-      throw Exception('Gagal menghapus admin: ${e.toString()}');
-    }
-  }
-
   // Get category statistics
   Future<Map<String, int>> getCategoryStatistics() async {
     try {
@@ -408,107 +281,187 @@ class AdminService {
     return null;
   }
 
-  // NEW: Update admin profile
-  Future<void> updateAdminProfile({
-    required String displayName,
-    String? phone,
+  // =====================================================
+  // FITUR CHAT ADMIN KE USER
+  // =====================================================
+
+  /// Kirim pesan dari admin ke user
+  Future<void> sendMessageToUser({
+    required String userId,
+    required String title,
+    required String message,
+    String type = 'message',
   }) async {
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
+      final currentAdmin = _supabase.auth.currentUser;
+      if (currentAdmin == null) {
         throw Exception('Admin tidak terautentikasi');
       }
 
-      // Update auth metadata
-      await _supabase.auth.updateUser(
-        UserAttributes(
-          data: {'display_name': displayName},
-        ),
-      );
-
-      // Update users table
-      final updateData = <String, dynamic>{
-        'display_name': displayName,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-
-      if (phone != null) {
-        updateData['phone'] = phone;
-      }
-
-      await _supabase
-          .from('users')
-          .update(updateData)
-          .eq('id', user.id);
-    } catch (e) {
-      print('Error updating admin profile: $e');
-      throw Exception('Gagal memperbarui profil');
-    }
-  }
-
-  // NEW: Change admin password
-  Future<void> changeAdminPassword({
-    required String newPassword,
-  }) async {
-    try {
-      await _supabase.auth.updateUser(
-        UserAttributes(password: newPassword),
-      );
-    } catch (e) {
-      print('Error changing password: $e');
-      throw Exception('Gagal mengubah password');
-    }
-  }
-
-  // NEW: Get admin activity logs (if you have a logs table)
-  Future<List<Map<String, dynamic>>> getAdminActivityLogs({
-    int limit = 50,
-    String? adminId,
-  }) async {
-    try {
-      if (adminId != null) {
-        final response = await _supabase
-            .from('admin_logs')
-            .select()
-            .eq('admin_id', adminId)
-            .order('created_at', ascending: false)
-            .limit(limit);
-        return List<Map<String, dynamic>>.from(response);
-      } else {
-        final response = await _supabase
-            .from('admin_logs')
-            .select()
-            .order('created_at', ascending: false)
-            .limit(limit);
-        return List<Map<String, dynamic>>.from(response);
-      }
-    } catch (e) {
-      print('Error fetching admin logs: $e');
-      // Return empty list if logs table doesn't exist
-      return [];
-    }
-  }
-
-  // NEW: Log admin activity
-  Future<void> logAdminActivity({
-    required String action,
-    required String description,
-    Map<String, dynamic>? metadata,
-  }) async {
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return;
-
-      await _supabase.from('admin_logs').insert({
-        'admin_id': user.id,
-        'action': action,
-        'description': description,
-        'metadata': metadata,
+      await _supabase.from('admin_messages').insert({
+        'admin_id': currentAdmin.id,
+        'user_id': userId,
+        'title': title,
+        'message': message,
+        'type': type,
+        'is_read': false,
         'created_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      // Silently fail if logs table doesn't exist
-      print('Error logging admin activity: $e');
+      print('Error sending message to user: $e');
+      throw Exception('Gagal mengirim pesan: ${e.toString()}');
+    }
+  }
+
+  /// Kirim pesan broadcast ke semua user (bukan admin)
+  Future<int> sendBroadcastMessage({
+    required String title,
+    required String message,
+    String type = 'announcement',
+  }) async {
+    try {
+      final currentAdmin = _supabase.auth.currentUser;
+      if (currentAdmin == null) {
+        throw Exception('Admin tidak terautentikasi');
+      }
+
+      // Get all non-admin users
+      final users = await _supabase
+          .from('users')
+          .select('id')
+          .eq('is_admin', false);
+
+      if (users.isEmpty) {
+        return 0;
+      }
+
+      // Prepare batch insert data
+      final messages = users.map((user) => {
+        'admin_id': currentAdmin.id,
+        'user_id': user['id'],
+        'title': title,
+        'message': message,
+        'type': type,
+        'is_read': false,
+        'created_at': DateTime.now().toIso8601String(),
+      }).toList();
+
+      await _supabase.from('admin_messages').insert(messages);
+
+      return users.length;
+    } catch (e) {
+      print('Error sending broadcast message: $e');
+      throw Exception('Gagal mengirim broadcast: ${e.toString()}');
+    }
+  }
+
+  /// Get pesan untuk user tertentu (chat history dengan user)
+  Future<List<Map<String, dynamic>>> getMessagesForUser(String userId) async {
+    try {
+      final response = await _supabase
+          .from('admin_messages')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching messages for user: $e');
+      throw Exception('Gagal memuat pesan untuk user');
+    }
+  }
+
+  /// Hapus pesan
+  Future<void> deleteMessage(String messageId) async {
+    try {
+      await _supabase.from('admin_messages').delete().eq('id', messageId);
+    } catch (e) {
+      print('Error deleting message: $e');
+      throw Exception('Gagal menghapus pesan');
+    }
+  }
+
+  // =====================================================
+  // FITUR MANAJEMEN ADMIN
+  // =====================================================
+
+  /// Get semua admin
+  Future<List<Map<String, dynamic>>> getAllAdmins() async {
+    try {
+      final response = await _supabase
+          .from('users')
+          .select()
+          .eq('is_admin', true)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching admins: $e');
+      throw Exception('Gagal memuat data admin');
+    }
+  }
+
+  /// Buat admin baru
+  Future<void> createNewAdmin({
+    required String email,
+    required String password,
+    required String displayName,
+  }) async {
+    try {
+      // 1. Daftarkan user baru via Supabase Auth
+      final authResponse = await _supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'display_name': displayName,
+        },
+      );
+
+      if (authResponse.user == null) {
+        throw Exception('Gagal membuat akun');
+      }
+
+      // 2. Insert ke tabel users dengan is_admin = true
+      await _supabase.from('users').insert({
+        'id': authResponse.user!.id,
+        'email': email,
+        'username': email.split('@')[0],
+        'display_name': displayName,
+        'is_admin': true,
+        'is_active': true,
+        'is_verified': false,
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      print('Error creating new admin: $e');
+      throw Exception('Gagal membuat admin baru: ${e.toString()}');
+    }
+  }
+
+  /// Update status admin (aktif/nonaktif)
+  Future<void> updateAdminStatus(String userId, bool isActive) async {
+    try {
+      await _supabase.from('users').update({
+        'is_active': isActive,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+    } catch (e) {
+      print('Error updating admin status: $e');
+      throw Exception('Gagal mengubah status admin');
+    }
+  }
+
+  /// Hapus admin (set is_admin = false)
+  Future<void> removeAdmin(String userId) async {
+    try {
+      await _supabase.from('users').update({
+        'is_admin': false,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
+    } catch (e) {
+      print('Error removing admin: $e');
+      throw Exception('Gagal menghapus admin');
     }
   }
 }
