@@ -8,6 +8,7 @@ import 'laporan_management.dart';
 import 'user_management.dart';
 import 'statistics_page.dart';
 import 'settings_page.dart';
+import 'notifications_page.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -120,47 +121,60 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _buildSidebarHeader() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Row(
         children: [
+          // Logo image
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
               borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.admin_panel_settings_rounded,
               color: Colors.white,
-              size: 24,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Image.asset(
+              'assets/images/admin_logo.png',
+              fit: BoxFit.cover,
             ),
           ),
           if (_isSidebarExpanded) ...[
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Admin Panel',
+                'Admin Laporan Warga',
                 style: GoogleFonts.poppins(
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
+                  height: 1.2,
                 ),
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
-          IconButton(
-            onPressed: () {
-              setState(() {
-                _isSidebarExpanded = !_isSidebarExpanded;
-              });
-            },
-            icon: Icon(
-              _isSidebarExpanded
-                  ? Icons.chevron_left_rounded
-                  : Icons.chevron_right_rounded,
-              color: Colors.white54,
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 32,
+            height: 32,
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () {
+                setState(() {
+                  _isSidebarExpanded = !_isSidebarExpanded;
+                });
+              },
+              icon: AnimatedRotation(
+                turns: _isSidebarExpanded ? 0 : 0.5,
+                duration: const Duration(milliseconds: 200),
+                child: const Icon(
+                  Icons.chevron_left_rounded,
+                  color: Colors.white70,
+                  size: 22,
+                ),
+              ),
             ),
           ),
         ],
@@ -418,7 +432,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         children: [
           IconButton(
             onPressed: () {
-              // Show notifications
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationsPage()),
+              );
             },
             icon: const Icon(
               Icons.notifications_outlined,
