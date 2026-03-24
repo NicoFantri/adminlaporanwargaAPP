@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +9,9 @@ import '../services/admin_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:csv/csv.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import '../utils/download_helper.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -1019,13 +1023,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(width: 12),
                         _buildFormatOption(
-                          format: 'Excel',
-                          icon: Icons.grid_on_outlined,
-                          isSelected: selectedFormat == 'Excel',
-                          onTap: () => setDialogState(() => selectedFormat = 'Excel'),
-                        ),
-                        const SizedBox(width: 12),
-                        _buildFormatOption(
                           format: 'PDF',
                           icon: Icons.picture_as_pdf_outlined,
                           isSelected: selectedFormat == 'PDF',
@@ -1210,14 +1207,22 @@ class _SettingsPageState extends State<SettingsPage> {
         return;
       }
 
-      if (kIsWeb) {
-        _showSnackBar('Export tidak didukung di web', isError: true);
-        return;
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      List<int> bytes;
+      String fileName;
+
+      if (format == 'CSV') {
+        final csvString = _generateCSV(laporanList);
+        bytes = utf8.encode(csvString);
+        fileName = 'laporan_$timestamp.csv';
+      } else if (format == 'PDF') {
+        bytes = await _generatePDF(laporanList);
+        fileName = 'laporan_$timestamp.pdf';
+      } else {
+        throw Exception('Format tidak didukung');
       }
 
-      String filePath = await _exportToCSV(laporanList);
-
-      await Share.shareXFiles([XFile(filePath)], text: 'Data Laporan');
+      await downloadFile(bytes, fileName);
       _showSnackBar('Data berhasil di-export ke $format');
     } catch (e) {
       _showSnackBar('Gagal export data: ${e.toString()}', isError: true);
@@ -1228,7 +1233,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<String> _exportToCSV(List<Map<String, dynamic>> data) async {
+  String _generateCSV(List<Map<String, dynamic>> data) {
     List<List<dynamic>> rows = [];
 
     rows.add([
@@ -1259,14 +1264,35 @@ class _SettingsPageState extends State<SettingsPage> {
       ]);
     }
 
-    String csv = const ListToCsvConverter().convert(rows);
+    return const ListToCsvConverter().convert(rows);
+  }
 
-    final directory = await getApplicationDocumentsDirectory();
-    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final file = File('${directory.path}/laporan_$timestamp.csv');
-    await file.writeAsString(csv);
+  Future<List<int>> _generatePDF(List<Map<String, dynamic>> data) async {
+    final pdf = pw.Document();
 
-    return file.path;
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        build: (pw.Context context) {
+          return [
+            pw.Header(level: 0, child: pw.Text('Data Laporan Warga')),
+            pw.TableHelper.fromTextArray(
+              context: context,
+              headers: ['ID', 'Judul', 'Kategori', 'Status', 'Tanggal'],
+              data: data.map((laporan) => [
+                laporan['id']?.toString() ?? '-',
+                laporan['title']?.toString() ?? '-',
+                laporan['category']?.toString() ?? '-',
+                laporan['status']?.toString() ?? '-',
+                _formatDateTime(laporan['created_at']),
+              ]).toList(),
+            ),
+          ];
+        },
+      ),
+    );
+
+    return await pdf.save();
   }
 
   String _formatDateTime(String? dateStr) {

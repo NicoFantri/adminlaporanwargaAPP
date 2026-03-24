@@ -9,6 +9,7 @@ import 'user_management.dart';
 import 'statistics_page.dart';
 import 'settings_page.dart';
 import 'notifications_page.dart';
+import '../services/notification_service.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -121,63 +122,67 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _buildSidebarHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          // Logo image
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: Colors.white,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Image.asset(
-              'assets/images/admin_logo.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          if (_isSidebarExpanded) ...[
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Admin Laporan Warga',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  height: 1.2,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      child: _isSidebarExpanded
+          ? Row(
+              children: [
+                // Logo image
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.white,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset(
+                    'assets/images/admin_logo.png',
+                    fit: BoxFit.cover,
+                  ),
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-          const SizedBox(width: 4),
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              onPressed: () {
-                setState(() {
-                  _isSidebarExpanded = !_isSidebarExpanded;
-                });
-              },
-              icon: AnimatedRotation(
-                turns: _isSidebarExpanded ? 0 : 0.5,
-                duration: const Duration(milliseconds: 200),
-                child: const Icon(
-                  Icons.chevron_left_rounded,
-                  color: Colors.white70,
-                  size: 22,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Admin Laporan Warga',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ),
+                const SizedBox(width: 4),
+                _buildToggleButton(),
+              ],
+            )
+          : Center(child: _buildToggleButton()),
+    );
+  }
+
+  Widget _buildToggleButton() {
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        onPressed: () {
+          setState(() {
+            _isSidebarExpanded = !_isSidebarExpanded;
+          });
+        },
+        icon: AnimatedRotation(
+          turns: _isSidebarExpanded ? 0 : 0.5,
+          duration: const Duration(milliseconds: 200),
+          child: const Icon(
+            Icons.chevron_left_rounded,
+            color: Colors.white70,
+            size: 24,
           ),
-        ],
+        ),
       ),
     );
   }
@@ -422,6 +427,37 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  final NotificationService _notificationService = NotificationService();
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initNotificationService();
+  }
+
+  void _initNotificationService() async {
+    await _notificationService.initialize();
+    if (mounted) {
+      setState(() {
+        _unreadCount = _notificationService.unreadCount;
+      });
+      _notificationService.notificationsStream.listen((notifications) {
+        if (mounted) {
+          setState(() {
+            _unreadCount = notifications.where((n) => !n.isRead).length;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _notificationService.dispose();
+    super.dispose();
+  }
+
   Widget _buildNotificationButton() {
     return Container(
       decoration: BoxDecoration(
@@ -442,18 +478,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
               color: AppColors.textSecondary,
             ),
           ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: AppColors.error,
-                shape: BoxShape.circle,
+          if (_unreadCount > 0)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: AppColors.error,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  _unreadCount > 9 ? '9+' : _unreadCount.toString(),
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    height: 1,
+                  ),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -554,7 +599,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       onSelected: (value) {
         if (value == 'logout') {
           _handleLogout();
-        } else if (value == 'settings') {
+        } else if (value == 'settings' || value == 'profile') {
           setState(() {
             _selectedIndex = 4; // Settings page index
           });
